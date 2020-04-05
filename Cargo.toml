@@ -1,0 +1,13 @@
+[package]
+name = "BlockChainRust"
+version = "0.1.0"
+authors = ["zmant <zmant724@aliyun.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+openssl = "0.10.28"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+hex = "0.4.2"
