@@ -1,13 +1,16 @@
 use openssl::sha;
 use serde::{ Serialize, Deserialize };
-use openssl::version::version;
+use bigint::uint;
+use openssl::sha::sha256;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 pub struct Block {
     time_stamp: u64,
     data: String,
     pre_block_hash: [u8; 32],
     cur_block_hash: [u8; 32],
+    target_bits: u8,
+    nonce: u32,
 }
 
 impl Block {
@@ -17,9 +20,11 @@ impl Block {
             time_stamp: std::time::SystemTime::now().elapsed().unwrap().as_secs(),
             data,
             pre_block_hash,
-            cur_block_hash: [0;32]
+            cur_block_hash: [0;32],
+            target_bits: 16,
+            nonce: 0,
         };
-        block.set_hash();
+        block.cur_block_hash = Block::proof_of_work(&mut block);
         block
     }
 
@@ -34,14 +39,6 @@ impl Block {
     pub fn data(&self) -> &String {
         &self.data
     }
-
-    fn set_hash(&mut self) {
-        let value = serde_json::to_string(self).unwrap();
-        self.cur_block_hash = sha::sha256(value.as_bytes());
-    }
-
-
-
 }
 
 pub struct BlockChain { blocks: Vec<Block> }
@@ -62,6 +59,31 @@ impl BlockChain {
 
     pub fn blocks(&self) -> &Vec<Block> {
         &self.blocks
+    }
+}
+
+trait ProofOfWork {
+    fn proof_of_work(&mut self) -> [u8;32];
+}
+
+impl ProofOfWork for Block {
+
+    fn proof_of_work(&mut self) -> [u8; 32] {
+        let one = uint::U256::one();
+        let target = one << ( 256 - self.target_bits as usize );
+
+        while self.nonce < u32::MAX {
+            let value = serde_json::to_string(&self).unwrap_or("".to_string());
+            let hash = sha256(value.as_bytes());
+            let hashInt = uint::U256::from(hash);
+            if hashInt < target {
+                println!("Find the valid hash: {}", hex::encode(hash));
+                return hash;
+            } else {
+                self.nonce += 1;
+            }
+        }
+        [0;32]
     }
 }
 

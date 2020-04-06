@@ -12,6 +12,7 @@ fn main() {
         println!("Prev. hash: {:?}", bc.pre_block_hash());
         println!("Data: {:?}", bc.data());
         println!("Hash: {:?}", bc.cur_block_hash());
-        println!("\n");
+        println!("Block: {:?}", bc);
+        println!("");
     }
 }
