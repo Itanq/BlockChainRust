@@ -48,7 +48,7 @@ impl ToString for Block {
 }
 
 pub struct BlockChain {
-    header: [u8; 32],
+    id: [u8; 32],
     db: sled::Db,
 }
 
@@ -65,11 +65,11 @@ impl BlockChain {
             block.cur_block_hash.to_vec()
         };
 
-        let mut header = [0u8; 32];
-        header.copy_from_slice(&hash[..hash.len()]);
+        let mut id = [0u8; 32];
+        id.copy_from_slice(&hash[..hash.len()]);
 
         BlockChain {
-            header,
+            id,
             db,
         }
     }
@@ -82,23 +82,53 @@ impl BlockChain {
         self.db.insert("last", &new_block.cur_block_hash);
     }
 
-    pub fn print(&self) {
-        if let Some(hash) = self.db.get("last").unwrap() {
-            let mut block = self.get_block(&hash.to_vec());
-            while block.pre_block_hash != [0u8; 32] {
-                println!("Prev Hash: {:?}", block.pre_block_hash());
-                println!("Data: {}", block.data);
-                println!("Cur Hash: {:?}\n", block.cur_block_hash());
-                block =  self.get_block(&block.pre_block_hash);
-            }
-            println!("Prev Hash: {:?}", block.pre_block_hash());
-            println!("Data: {}", block.data);
-            println!("Cur Hash: {:?}\n", block.cur_block_hash());
+    pub fn iter(&self) -> BlockChainIter {
+        let mut cur_hash = [0u8; 32];
+        cur_hash.copy_from_slice(&self.db.get("last").unwrap().unwrap().to_vec());
+
+        BlockChainIter {
+            cur_hash,
+            db: self.db.clone()
         }
     }
 
     fn get_block(&self, hash: &[u8]) -> Block {
-        serde_json::from_slice(&self.db.get(hash).unwrap().unwrap().to_vec()).unwrap()
+        serde_json::from_slice(&self.db.get(hash).unwrap().unwrap()).unwrap()
+    }
+
+    pub fn print(&self) {
+        let mut iter = self.iter();
+        while let Some(bc) = iter.next() {
+            println!("Prev Hash: {:?}", bc.pre_block_hash());
+            println!("Curr Hash: {:?}", bc.cur_block_hash());
+            println!("Data: {}\n", bc.data);
+        }
+    }
+}
+
+pub struct BlockChainIter {
+    cur_hash: [u8; 32],
+    db: sled::Db,
+}
+
+impl BlockChainIter {
+    fn next(&mut self) -> Option<Block> {
+        if self.cur_hash == [0u8; 32] {
+            return None;
+        }
+        if let Ok(block) = serde_json::from_slice::<Block>(&self.db.get(self.cur_hash).unwrap().unwrap()) {
+            self.cur_hash = block.pre_block_hash;
+            Some(block)
+        } else {
+            None
+        }
+    }
+}
+
+impl Iterator for BlockChainIter {
+    type Item = Block;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next()
     }
 }
 
