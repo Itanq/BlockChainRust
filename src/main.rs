@@ -1,11 +1,8 @@
 
-use BlockChainRust::BlockChain;
+use structopt::StructOpt;
+use BlockChainRust::{ Opt, run };
 
 fn main() {
-    let mut block = BlockChain::new_block_chain();
-
-    //block.add_block("Send 1 BTC to Ivan".to_string());
-    //block.add_block("Send 2 BTC to Ivan".to_string());
-
-    block.print();
+    let opt = Opt::from_args();
+    run(opt);
 }

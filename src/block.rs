@@ -39,6 +39,12 @@ impl Block {
     pub fn data(&self) -> &String {
         &self.data
     }
+
+    pub fn print(&self) {
+        println!("Prev Hash: {:?}", self.pre_block_hash());
+        println!("Curr Hash: {:?}", self.cur_block_hash());
+        println!("Data: {}\n", self.data);
+    }
 }
 
 impl ToString for Block {
@@ -80,6 +86,7 @@ impl BlockChain {
         let new_block = Block::new_block(data, pre_block_hash);
         self.db.insert(new_block.cur_block_hash, &new_block.to_string()[..]);
         self.db.insert("last", &new_block.cur_block_hash);
+        println!("{}", hex::encode(new_block.cur_block_hash));
     }
 
     pub fn iter(&self) -> BlockChainIter {
@@ -92,7 +99,7 @@ impl BlockChain {
         }
     }
 
-    fn get_block(&self, hash: &[u8]) -> Block {
+    pub fn get_block(&self, hash: &[u8]) -> Block {
         serde_json::from_slice(&self.db.get(hash).unwrap().unwrap()).unwrap()
     }
 
@@ -116,6 +123,7 @@ impl BlockChainIter {
         if self.cur_hash == [0u8; 32] {
             return None;
         }
+        println!("hash: {:?}", self.cur_hash);
         if let Ok(block) = serde_json::from_slice::<Block>(&self.db.get(self.cur_hash).unwrap().unwrap()) {
             self.cur_hash = block.pre_block_hash;
             Some(block)
