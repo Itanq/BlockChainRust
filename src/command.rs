@@ -1,6 +1,7 @@
 use structopt::StructOpt;
 use crate::BlockChain;
 use serde::export::Option::Some;
+use crate::block::Transaction;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "bc_cli", about = "An command line interface for BlockChainRust!!!")]
@@ -13,35 +14,75 @@ pub struct Opt {
 
 #[derive(Debug, StructOpt)]
 pub enum SubCommand {
-    #[structopt( help = "Add a new block to chain!")]
-    AddBlock {
-        #[structopt(short,long, help = "the data of block need to be add!")]
-        data: String,
+    #[structopt( help = "Create a blockchain and send genesis block reward to ADDRESS")]
+    CreateBlockChain {
+        #[structopt(short,long, help = "create-blockchain --address ADDRESS")]
+        address: String,
     },
 
-    #[structopt( help = "Get a specific block from chain!")]
-    Get {
-        #[structopt(short,long, help = "the hash value of the node that need to obtain!")]
-        node: String
+    #[structopt( help = "Get balance of ADDRESS!")]
+    GetBalance {
+        #[structopt(short,long, help = "get-balance --address ADDRESS")]
+        address: String
+    },
+
+    #[structopt( help = "Send AMOUNT of coins from FROM address to TO address")]
+    Send {
+        #[structopt(long, help = "send --from FROM --to TO --amount AMOUNT")]
+        from: String,
+
+        #[structopt(long, help = "The dest address of the send transaction")]
+        to: String,
+
+        #[structopt(long, help = "The amount of the send transaction")]
+        amount: i32
+    }
+}
+
+fn create_blockchain(address: &str) {
+    if let Some(bc) = BlockChain::create_blockchain(address) {
+        println!("Block: {:?}", hex::encode(bc.tip));
+        println!("Create BlockChain DONE!!!");
+    }
+}
+
+
+fn get_balance(address: &str) {
+    if let Some(bc) = BlockChain::new_block_chain(address) {
+        let utxo = bc.find_utxo(address);
+        let balance = utxo.iter().fold(0, |acc, x| {
+            acc + x.value
+        });
+        println!("Balance of {}: {}", address, balance);
+    }
+}
+
+fn print_blockchain() {
+    if let Some(bc) = BlockChain::new_block_chain("") {
+        bc.print();
+    }
+}
+
+fn send(from: &str, to: &str, amount: i32) {
+    if let Some(mut bc) = BlockChain::new_block_chain(&from) {
+        let tx = Transaction::new_utxo_transaction(from, to, amount, &bc).unwrap();
+        bc.mine_block(vec![tx])
     }
 }
 
 pub fn run(opt: Opt) {
-    let mut block = BlockChain::new_block_chain();
     if opt.print {
-        block.print();
+        print_blockchain();
     } else if let Some(cmd) = opt.cmd {
         match cmd {
-            SubCommand::AddBlock { data } => {
-                println!("Mining the block: {}", data);
-                block.add_block(data);
-                println!("\nSuccess!");
+            SubCommand::CreateBlockChain { address } => {
+                create_blockchain(&address);
             },
-            SubCommand::Get{ node } => {
-                println!("Get the block of {}", node);
-                let block = block.get_block(&hex::decode(node.as_bytes()).unwrap());
-                block.print();
-                println!("\nSuccess!");
+            SubCommand::GetBalance{ address } => {
+                get_balance(&address);
+            },
+            SubCommand::Send { from, to, amount} => {
+                send(&from, &to, amount);
             }
         }
     }
