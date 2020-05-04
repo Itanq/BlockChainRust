@@ -4,6 +4,7 @@ use bigint::uint;
 use openssl::sha::sha256;
 use openssl::version::version;
 use std::collections::HashMap;
+use std::path::Display;
 
 const blockchain_db: &str = "block_chain.db";
 const genesis_coinbase_data: &str = "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks";
@@ -20,6 +21,7 @@ impl TXInput {
         self.script_sig == unlock_data
     }
 }
+
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TXOutput {
@@ -195,24 +197,21 @@ impl BlockChain {
         let mut unspent_txs = Vec::new();
         let mut spent_txs: HashMap<String, Vec<i32>> = HashMap::new();
 
-        println!("find_unspent_transaction: {}", address);
-
         let mut iter = self.iter();
-
         while let Some(bc) = iter.next() {
-            println!("block:{:?}", bc);
             for tx in bc.transaction {
                 let tx_id = hex::encode(tx.id.clone());
-                for out in &tx.vout {
+                for (out_idx, out) in tx.vout.iter().enumerate() {
                     let mut spent = false;
                     if let Some(spent_outs) = spent_txs.get(&tx_id) {
                         for spent_out in spent_outs {
-                            if *spent_out == out.value {
+                            if *spent_out == out_idx as i32 {
                                 spent = true;
                                 break;
                             }
                         }
                     }
+
                     if !spent && out.can_be_unlock(&address) {
                         unspent_txs.push(tx.clone());
                         break;
@@ -230,9 +229,7 @@ impl BlockChain {
                             }
                         }
                     }
-
                 }
-
             }
         }
 
@@ -262,7 +259,6 @@ impl BlockChain {
         }
     }
 }
-
 
 
 impl Transaction {

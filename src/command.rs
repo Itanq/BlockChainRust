@@ -65,8 +65,11 @@ fn print_blockchain() {
 
 fn send(from: &str, to: &str, amount: i32) {
     if let Some(mut bc) = BlockChain::new_block_chain(&from) {
-        let tx = Transaction::new_utxo_transaction(from, to, amount, &bc).unwrap();
-        bc.mine_block(vec![tx])
+        if let Some(tx) = Transaction::new_utxo_transaction(from, to, amount, &bc) {
+            bc.mine_block(vec![tx])
+        } else {
+            println!("The balance of {} is not enough!", from);
+        }
     }
 }
 
