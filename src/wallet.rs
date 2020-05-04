@@ -104,19 +104,23 @@ impl Wallets {
         self.wallets.get(&address.to_string())
     }
 
-    fn load_from_file() -> Option<Self> {
-        let file = File::open(wallet_file).unwrap();
-        let buf_reader = BufReader::new(file);
-        if let Ok(res) = serde_json::from_reader(buf_reader) {
-            return Some(res);
-        }
-        None
-    }
-
-    fn save_to_file(&self) {
-        let file = OpenOptions::new().append(true).open(wallet_file).unwrap();
+    pub fn save_to_file(&self) {
+        let file = OpenOptions::new().create(true).append(true).open(wallet_file).unwrap();
         let buf_writer = BufWriter::new(file);
         serde_json::to_writer(buf_writer, self).unwrap()
     }
+
+    fn load_from_file() -> Option<Self> {
+        if let Ok(file) = File::open(wallet_file) {
+            let buf_reader = BufReader::new(file);
+            if let Ok(res) = serde_json::from_reader(buf_reader) {
+                return Some(res);
+            }
+            None
+        } else {
+            None
+        }
+    }
+
 
 }

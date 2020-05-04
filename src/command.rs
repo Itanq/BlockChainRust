@@ -3,12 +3,17 @@ use crate::BlockChain;
 use serde::export::Option::Some;
 use crate::block::Transaction;
 use crate::utils::Utils;
+use crate::wallet::Wallets;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "bc_cli", about = "An command line interface for BlockChainRust!!!")]
 pub struct Opt {
     #[structopt(short,long, help = "print all block information in the main chain of the blockchain!")]
     print: bool,
+
+    #[structopt(long, help = "Generates a new key-pair and saves it into the wallet file!")]
+    CreateWallet: bool,
+
     #[structopt(subcommand)]
     cmd: Option<SubCommand>,
 }
@@ -47,6 +52,13 @@ fn create_blockchain(address: &str) {
     }
 }
 
+fn create_wallet() {
+    let mut wallets = Wallets::new();
+    let address = wallets.create_wallet();
+    wallets.save_to_file();
+
+    println!("Your new wallet address: {}", address);
+}
 
 fn get_balance(address: &str) {
     if !Utils::validate_address(address) {
@@ -83,6 +95,8 @@ fn send(from: &str, to: &str, amount: i32) {
 pub fn run(opt: Opt) {
     if opt.print {
         print_blockchain();
+    } else if opt.CreateWallet {
+        create_wallet();
     } else if let Some(cmd) = opt.cmd {
         match cmd {
             SubCommand::CreateBlockChain { address } => {
