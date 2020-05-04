@@ -2,6 +2,7 @@ use structopt::StructOpt;
 use crate::BlockChain;
 use serde::export::Option::Some;
 use crate::block::Transaction;
+use crate::utils::Utils;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "bc_cli", about = "An command line interface for BlockChainRust!!!")]
@@ -48,12 +49,18 @@ fn create_blockchain(address: &str) {
 
 
 fn get_balance(address: &str) {
+    if !Utils::validate_address(address) {
+        println!("ERROR: Address is not valid!");
+        return;
+    }
+
     if let Some(bc) = BlockChain::new_block_chain(address) {
-        let utxo = bc.find_utxo(address);
+        let pub_key_hash = Utils::get_pub_key_hash(address);
+        let utxo = bc.find_utxo(&pub_key_hash);
         let balance = utxo.iter().fold(0, |acc, x| {
             acc + x.value
         });
-        println!("Balance of {}: {}", address, balance);
+        println!("Balance of '{}': {}", address, balance);
     }
 }
 

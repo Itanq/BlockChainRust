@@ -5,6 +5,9 @@ use openssl::sha::sha256;
 use openssl::version::version;
 use std::collections::HashMap;
 use std::path::Display;
+use crate::utils::*;
+use sled::open;
+use crate::wallet::Wallets;
 
 const blockchain_db: &str = "block_chain.db";
 const genesis_coinbase_data: &str = "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks";
@@ -13,12 +16,15 @@ const genesis_coinbase_data: &str = "The Times 03/Jan/2009 Chancellor on brink o
 struct TXInput {
     tx_id: [u8;32],
     vout: i32,
-    script_sig: String
+    signature: Vec<u8>,
+    pub_key: Vec<u8>,
 }
 
 impl TXInput {
-    pub fn can_unlock_output(&self, unlock_data: &str) -> bool {
-        self.script_sig == unlock_data
+
+    pub fn uses_key(&self, pub_key_hash: &[u8]) -> bool {
+        let lock_hash = Utils::hash_pub_key(&self.pub_key);
+        lock_hash == pub_key_hash
     }
 }
 
@@ -26,12 +32,28 @@ impl TXInput {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TXOutput {
     pub value: i32,
-    script_pub_key: String
+    pub_key_hash: Vec<u8>
 }
 
 impl TXOutput {
-    pub fn can_be_unlock(&self, unlock_data: &str) -> bool {
-        self.script_pub_key == unlock_data
+
+    pub fn new(value: i32, address: &str) -> Self {
+        let mut out = TXOutput{
+            value,
+            pub_key_hash: vec![],
+        };
+        out.lock(address);
+
+        out
+    }
+    pub fn lock(&mut self, address: &str) {
+        let address_payload = openssl::base64::decode_block(address).unwrap();
+        let pub_key_hash = &address_payload[1..address_payload.len() - address_checksum_len];
+        self.pub_key_hash = pub_key_hash.to_vec();
+    }
+
+    pub fn is_locked_with_key(&self, key: &[u8]) -> bool {
+        self.pub_key_hash == key
     }
 }
 
@@ -151,13 +173,13 @@ impl BlockChain {
         println!("{}", hex::encode(new_block.cur_block_hash));
     }
 
-    pub fn find_utxo(&self, address: &str) -> Vec<TXOutput> {
+    pub fn find_utxo(&self, pub_key_hash: &[u8]) -> Vec<TXOutput> {
         let mut utxo = Vec::<TXOutput>::new();
-        let unspent_txs = self.find_unspent_transaction(address);
+        let unspent_txs = self.find_unspent_transaction(pub_key_hash);
 
         for tx in unspent_txs {
             for out in tx.vout {
-                if out.can_be_unlock(address) {
+                if out.is_locked_with_key(pub_key_hash) {
                     utxo.push(out);
                 }
             }
@@ -165,9 +187,9 @@ impl BlockChain {
         utxo
     }
 
-    pub fn find_spendable_outputs(&self, address: &str, amount: i32) -> (i32, HashMap<String,Vec<i32>>) {
+    pub fn find_spendable_outputs(&self, pub_key_hash: &[u8], amount: i32) -> (i32, HashMap<String,Vec<i32>>) {
         let mut unspent_outputs = HashMap::<String,Vec<i32>>::new();
-        let mut unspent_txs = self.find_unspent_transaction(address);
+        let mut unspent_txs = self.find_unspent_transaction(pub_key_hash);
         let mut acc = 0;
 
 
@@ -175,7 +197,7 @@ impl BlockChain {
             let tx_id = hex::encode(tx.id);
             let mut unspent_array = Vec::<i32>::new();
             for (idx, out) in tx.vout.iter().enumerate() {
-                if out.can_be_unlock(address) && acc < amount {
+                if out.is_locked_with_key(pub_key_hash) && acc < amount {
                     acc += out.value;
                     unspent_array.push(idx as i32);
 
@@ -193,7 +215,7 @@ impl BlockChain {
         (acc, unspent_outputs)
     }
 
-    pub fn find_unspent_transaction(&self, address: &str) -> Vec<Transaction> {
+    pub fn find_unspent_transaction(&self, pub_key_hash: &[u8]) -> Vec<Transaction> {
         let mut unspent_txs = Vec::new();
         let mut spent_txs: HashMap<String, Vec<i32>> = HashMap::new();
 
@@ -212,7 +234,7 @@ impl BlockChain {
                         }
                     }
 
-                    if !spent && out.can_be_unlock(&address) {
+                    if !spent && out.is_locked_with_key(pub_key_hash) {
                         unspent_txs.push(tx.clone());
                         break;
                     }
@@ -220,7 +242,7 @@ impl BlockChain {
                 if !tx.is_coinbase() {
                     let mut vout_arr = Vec::<i32>::new();
                     for tx_in in tx.vin {
-                        if tx_in.can_unlock_output(&address) {
+                        if tx_in.uses_key(pub_key_hash) {
                             let id = hex::encode(tx_in.tx_id);
                             if let Some(arr) = spent_txs.get_mut(&id) {
                                 arr.push(tx_in.vout);
@@ -271,12 +293,13 @@ impl Transaction {
         let tx_in = TXInput{
             tx_id: [0u8;32],
             vout: -1,
-            script_sig: data
+            signature: vec![],
+            pub_key: data.as_bytes().to_vec()
         };
 
         let tx_out = TXOutput{
             value: 10,
-            script_pub_key: to.to_string()
+            pub_key_hash: to.as_bytes().to_vec()
         };
 
         let mut tx = Transaction {
@@ -299,7 +322,12 @@ impl Transaction {
         let mut outputs = Vec::<TXOutput>::new();
         println!("from:{} to:{} amount:{}", from,to,amount);
 
-        let (acc, valid_outputs) = bc.find_spendable_outputs(from, amount);
+        let wallets = Wallets::new();
+        let wallet = wallets.get_wallet(from).unwrap();
+        let pub_key_hash = wallet.hash_pub_key();
+
+        let (acc, valid_outputs) = bc.find_spendable_outputs(
+            &pub_key_hash, amount);
         if acc < amount {
             return None;
         }
@@ -311,22 +339,17 @@ impl Transaction {
                 let input = TXInput {
                     tx_id,
                     vout: out,
-                    script_sig: from.to_string()
+                    signature: vec![],
+                    pub_key: wallet.public_key()
                 };
                 inputs.push(input);
             }
         }
 
-        outputs.push(TXOutput {
-            value: amount,
-            script_pub_key: to.to_string()
-        });
+        outputs.push(TXOutput::new(amount, to));
 
         if acc > amount {
-            outputs.push(TXOutput {
-                value: acc - amount,
-                script_pub_key: from.to_string()
-            });
+            outputs.push(TXOutput::new(acc - amount, from));
         }
 
          let mut tx = Transaction{
