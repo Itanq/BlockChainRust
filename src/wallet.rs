@@ -13,6 +13,7 @@ use serde::{
 };
 
 use crate::utils::*;
+use std::path::Path;
 
 const wallet_file: &str = "wallet.dat";
 
@@ -71,24 +72,22 @@ pub struct Wallets {
 
 impl Wallets {
     pub fn new() -> Self {
-        let wallets = if let Some(wallets) = Wallets::load_from_file() {
+        let mut wallets = if let Some(wallets) = Wallets::load_from_file() {
             wallets
         } else {
-            let mut wallets = Wallets {
+            Wallets {
                 wallets: HashMap::new()
-            };
-            wallets.create_wallet();
-            wallets
+            }
         };
+        println!("wallets size: {}", wallets.wallets.len());
         wallets
     }
 
     pub fn create_wallet(&mut self) -> String {
         let wallet = Wallet::new();
         let address = wallet.get_address();
-        if let Some(w) = self.wallets.get_mut(&address) {
-            *w = wallet
-        }
+        self.wallets.insert(address.clone(), wallet);
+        println!("create a new wallets, its' address: {}; its' size: {}", address, self.wallets.len());
         address
     }
 
@@ -105,19 +104,26 @@ impl Wallets {
     }
 
     pub fn save_to_file(&self) {
-        let file = OpenOptions::new().create(true).append(true).open(wallet_file).unwrap();
-        let buf_writer = BufWriter::new(file);
-        serde_json::to_writer(buf_writer, self).unwrap()
+        let path = Path::new(wallet_file);
+        if path.exists() {
+            std::fs::remove_file(path);
+        }
+        let file = OpenOptions::new().create(true).write(true).open(wallet_file).unwrap();
+        let mut buf_writer = BufWriter::new(file);
+        serde_json::to_writer(buf_writer, &serde_json::to_value(self).unwrap()).unwrap();
     }
 
     fn load_from_file() -> Option<Self> {
         if let Ok(file) = File::open(wallet_file) {
-            let buf_reader = BufReader::new(file);
+            let mut buf_reader = BufReader::new(file);
             if let Ok(res) = serde_json::from_reader(buf_reader) {
+                println!("no empty");
                 return Some(res);
             }
+            println!("111 empty");
             None
         } else {
+            println!("222 empty");
             None
         }
     }

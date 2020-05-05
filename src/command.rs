@@ -9,10 +9,13 @@ use crate::wallet::Wallets;
 #[structopt(name = "bc_cli", about = "An command line interface for BlockChainRust!!!")]
 pub struct Opt {
     #[structopt(short,long, help = "print all block information in the main chain of the blockchain!")]
-    print: bool,
+    Print: bool,
 
     #[structopt(long, help = "Generates a new key-pair and saves it into the wallet file!")]
     CreateWallet: bool,
+
+    #[structopt(long, help = "Lists all addresses from the wallet file!")]
+    ListAddress: bool,
 
     #[structopt(subcommand)]
     cmd: Option<SubCommand>,
@@ -76,6 +79,14 @@ fn get_balance(address: &str) {
     }
 }
 
+fn list_addresses() {
+    let wallets = Wallets::new();
+    let addresses = wallets.get_address();
+    addresses.iter().for_each(|x| {
+        println!("Address: {}", x);
+    });
+}
+
 fn print_blockchain() {
     if let Some(bc) = BlockChain::new_block_chain("") {
         bc.print();
@@ -93,10 +104,12 @@ fn send(from: &str, to: &str, amount: i32) {
 }
 
 pub fn run(opt: Opt) {
-    if opt.print {
+    if opt.Print {
         print_blockchain();
     } else if opt.CreateWallet {
         create_wallet();
+    } else if opt.ListAddress {
+        list_addresses();
     } else if let Some(cmd) = opt.cmd {
         match cmd {
             SubCommand::CreateBlockChain { address } => {
