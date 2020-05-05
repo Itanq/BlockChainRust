@@ -46,6 +46,7 @@ impl TXOutput {
 
         out
     }
+
     pub fn lock(&mut self, address: &str) {
         let address_payload = openssl::base64::decode_block(address).unwrap();
         let pub_key_hash = &address_payload[1..address_payload.len() - address_checksum_len];
@@ -192,7 +193,6 @@ impl BlockChain {
         let mut unspent_txs = self.find_unspent_transaction(pub_key_hash);
         let mut acc = 0;
 
-
         for tx in unspent_txs {
             let tx_id = hex::encode(tx.id);
             let mut unspent_array = Vec::<i32>::new();
@@ -297,10 +297,7 @@ impl Transaction {
             pub_key: data.as_bytes().to_vec()
         };
 
-        let tx_out = TXOutput{
-            value: 10,
-            pub_key_hash: to.as_bytes().to_vec()
-        };
+        let tx_out = TXOutput::new(10, to);
 
         let mut tx = Transaction {
             id: vec![0],
@@ -320,7 +317,6 @@ impl Transaction {
     {
         let mut inputs = Vec::<TXInput>::new();
         let mut outputs = Vec::<TXOutput>::new();
-        println!("from:{} to:{} amount:{}", from,to,amount);
 
         let wallets = Wallets::new();
         let wallet = wallets.get_wallet(from).unwrap();

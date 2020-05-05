@@ -49,6 +49,10 @@ pub enum SubCommand {
 }
 
 fn create_blockchain(address: &str) {
+    if !Utils::validate_address(address) {
+        println!("ERROR: Address is not valid!");
+        return;
+    }
     if let Some(bc) = BlockChain::create_blockchain(address) {
         println!("Block: {:?}", hex::encode(bc.tip));
         println!("Create BlockChain DONE!!!");

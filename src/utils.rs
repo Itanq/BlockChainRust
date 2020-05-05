@@ -24,20 +24,22 @@ impl Utils {
     }
 
     pub fn validate_address(address: &str) -> bool {
-        let address_payload = openssl::base64::decode_block(address).unwrap();
-        if address_payload.len() < address_checksum_len {
-            return false;
+        if let Ok(address_payload) = openssl::base64::decode_block(address) {
+            if address_payload.len() < address_checksum_len {
+                return false;
+            }
+
+            let checksum = &address_payload[address_payload.len() - address_checksum_len..];
+
+            let mut data = vec![ address_payload[0] ];
+            let pub_key_hash = address_payload[1..address_payload.len() - address_checksum_len].to_vec();
+            data.extend_from_slice(&pub_key_hash);
+
+            let target_checksum = Utils::check_sum(&data);
+
+            return checksum == target_checksum.as_slice();
         }
-
-        let checksum = &address_payload[address_payload.len() - address_checksum_len..];
-
-        let mut data = vec![ address_payload[0] ];
-        let pub_key_hash = address_payload[1..address_payload.len() - address_checksum_len].to_vec();
-        data.extend_from_slice(&pub_key_hash);
-
-        let target_checksum = Utils::check_sum(&data);
-
-        checksum == target_checksum.as_slice()
+        false
     }
 }
 
