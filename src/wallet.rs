@@ -19,8 +19,8 @@ const wallet_file: &str = "wallet.dat";
 
 #[derive(Serialize, Deserialize)]
 pub struct Wallet {
-    private_key: Vec<u8>,
-    public_key: Vec<u8>,
+    pub(crate) private_key: Vec<u8>,
+    pub(crate) public_key: Vec<u8>,
 }
 
 impl Wallet {

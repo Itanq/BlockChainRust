@@ -12,8 +12,6 @@ use crate::wallet::Wallets;
 use crate::utils::*;
 use crate::consensus::*;
 
-
-
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Block {
     pub(crate) time_stamp: u64,

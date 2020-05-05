@@ -1,10 +1,16 @@
 
 use serde::{ Serialize, Deserialize };
+use openssl::bn::BigNumContext;
+use openssl::ecdsa::EcdsaSig;
+use openssl::ec::*;
+use openssl::pkey::Private;
 
 use crate::utils::*;
 use crate::block::Block;
 use crate::block_chain::BlockChain;
 use crate::wallet::*;
+use std::collections::HashMap;
+use openssl::nid::Nid;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TXInput {
@@ -16,12 +22,11 @@ pub struct TXInput {
 
 impl TXInput {
 
-    pub fn uses_key(&self, pub_key_hash: &[u8]) -> bool {
+    pub fn used_by_key(&self, pub_key_hash: &[u8]) -> bool {
         let lock_hash = Utils::hash_pub_key(&self.pub_key);
         lock_hash == pub_key_hash
     }
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct TXOutput {
@@ -61,6 +66,10 @@ pub struct Transaction {
 
 impl Transaction {
 
+    pub fn is_coinbase(&self) -> bool {
+        self.vin.len() == 1 && self.vin[0].tx_id == [0u8;32] && self.vin[0].vout == -1
+    }
+
     pub fn new_coinbase_tx(to: &str, data: String) -> Self {
         let data = if data.is_empty() {
             format!("Reward to '{}'.", to)
@@ -83,10 +92,6 @@ impl Transaction {
         tx.set_id();
 
         tx
-    }
-
-    pub fn is_coinbase(&self) -> bool {
-        self.vin.len() == 1 && self.vin[0].tx_id == [0u8;32] && self.vin[0].vout == -1
     }
 
     pub fn new_utxo_transaction(from: &str, to: &str, amount: i32, bc: &BlockChain) -> Option<Self>
@@ -131,12 +136,88 @@ impl Transaction {
         };
         tx.set_id();
 
+        bc.sign_transaction(&wallet.private_key, &mut tx);
+
         Some(tx)
+    }
+
+    pub fn hash(&self) -> Vec<u8> {
+        let enc = serde_json::to_string(self).unwrap();
+        openssl::sha::sha256(&enc.as_bytes().to_vec()).to_vec()
     }
 
     pub fn set_id(&mut self) {
         let enc = serde_json::to_string(self).unwrap();
         self.id = openssl::sha::sha256(&enc.as_bytes().to_vec()).to_vec();
+    }
+
+    pub fn set_hash(data: Transaction) -> Vec<u8>{
+        let enc = serde_json::to_string(&data).unwrap();
+        openssl::sha::sha256(&enc.as_bytes().to_vec()).to_vec()
+    }
+
+    pub fn sign(&mut self, priv_key: &[u8], prev_txs: HashMap<String, Transaction>) {
+        if self.is_coinbase() {
+            return;
+        }
+
+        let tx_sign = self.trimmed_copy();
+
+        println!("tx_sign: before ::: {:?}", self);
+
+        for (idx, vin) in tx_sign.vin.iter().enumerate() {
+            let prev_tx = prev_txs.get(&hex::encode(vin.tx_id)).unwrap();
+            let mut tx = tx_sign.clone();
+            tx.vin[idx].signature = vec![];
+            tx.vin[idx].pub_key = prev_tx.vout.get(vin.vout as usize).unwrap().pub_key_hash.clone();
+            tx.set_id();
+
+            let key = EcKey::private_key_from_der(priv_key).unwrap();
+            let sig = EcdsaSig::sign(&tx.id, &*key).unwrap();
+
+            self.vin[idx].signature = sig.to_der().unwrap();
+        }
+        println!("tx_sign: before ::: {:?}", self);
+    }
+
+    pub fn trimmed_copy(&self) -> Self {
+        let mut inputs = Vec::<TXInput>::new();
+
+        self.vin.iter().for_each(|x| {
+            inputs.push(TXInput{ tx_id: x.tx_id, vout: x.vout, signature: vec![], pub_key: vec![]})
+        });
+
+
+        Transaction{
+            id: self.id.clone(),
+            vin: inputs,
+            vout: self.vout.clone(),
+        }
+    }
+
+    pub fn verify(&self, pub_key: &[u8], prev_txs: HashMap<String, Transaction>) -> bool {
+        let tx_copy = self.trimmed_copy();
+        let curve = EcGroup::from_curve_name(Nid::SECP256K1).unwrap();
+        let mut ctx = BigNumContext::new().unwrap();
+        let pkey = EcKey::from_public_key(
+            &*curve,
+            &EcPoint::from_bytes(&*curve, pub_key, &mut *ctx).unwrap()
+        ).unwrap();
+
+        for (idx, vin) in tx_copy.vin.iter().enumerate() {
+            let prev_tx = prev_txs.get(&hex::encode(vin.tx_id)).unwrap();
+
+            let mut tx = tx_copy.clone();
+            tx.vin[idx].signature = vec![];
+            tx.vin[idx].pub_key = prev_tx.vout.get(vin.vout as usize).unwrap().clone().pub_key_hash;
+            tx.set_id();
+
+            let ecdsa = EcdsaSig::from_der(&vin.signature).unwrap();
+            if !ecdsa.verify(&tx.id, &*pkey).unwrap() {
+                return false
+            }
+        }
+        true
     }
 
 }

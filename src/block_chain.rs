@@ -54,6 +54,8 @@ impl BlockChain {
     }
 
     pub fn mine_block(&mut self, transactions: Vec<Transaction>) {
+        //TODO: Verify the transaction before mine block!
+
         let mut pre_block_hash: [u8; 32] = [0u8;32];
         pre_block_hash.copy_from_slice(&self.db.get("last").unwrap().unwrap().to_vec()[..]);
         let new_block = Block::new_block(transactions, pre_block_hash);
@@ -130,7 +132,7 @@ impl BlockChain {
                 if !tx.is_coinbase() {
                     let mut vout_arr = Vec::<i32>::new();
                     for tx_in in tx.vin {
-                        if tx_in.uses_key(pub_key_hash) {
+                        if tx_in.used_by_key(pub_key_hash) {
                             let id = hex::encode(tx_in.tx_id);
                             if let Some(arr) = spent_txs.get_mut(&id) {
                                 arr.push(tx_in.vout);
@@ -167,6 +169,38 @@ impl BlockChain {
             println!("Curr Hash: {:?}", bc.cur_block_hash());
             println!("Data: {:?}\n", bc.transaction);
         }
+    }
+
+    pub fn find_transaction(&self, id: &[u8]) -> Option<Transaction> {
+        let mut iter = self.iter();
+        while let Some(bc) = iter.next() {
+            for tx in bc.transaction {
+                if tx.id == id {
+                    return Some(tx);
+                }
+            }
+        }
+        None
+    }
+
+    pub fn sign_transaction(&self, priv_key: &[u8], tx: &mut Transaction) {
+        let mut prev_txs = HashMap::<String, Transaction>::new();
+        for vin in &tx.vin {
+            if let Some(tx) = self.find_transaction(&vin.tx_id) {
+                prev_txs.insert(hex::encode(tx.id.clone()), tx.clone());
+            }
+        }
+        tx.sign(priv_key, prev_txs);
+    }
+
+    pub fn verify_transaction(&self, pub_key: &[u8], tx: &Transaction) -> bool {
+        let mut prev_txs = HashMap::<String,Transaction>::new();
+        for vin in &tx.vin {
+            if let Some(tx) = self.find_transaction(&vin.tx_id) {
+                prev_txs.insert(hex::encode(tx.id.clone()), tx.clone());
+            }
+        }
+        return tx.verify(pub_key, prev_txs);
     }
 }
 
