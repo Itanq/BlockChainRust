@@ -1,7 +1,10 @@
+
 use structopt::StructOpt;
-use crate::BlockChain;
 use serde::export::Option::Some;
-use crate::block::Transaction;
+
+use crate::block::Block;
+use crate::block_chain::BlockChain;
+use crate::transaction::*;
 use crate::utils::Utils;
 use crate::wallet::Wallets;
 

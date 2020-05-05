@@ -117,16 +117,11 @@ impl Wallets {
         if let Ok(file) = File::open(wallet_file) {
             let mut buf_reader = BufReader::new(file);
             if let Ok(res) = serde_json::from_reader(buf_reader) {
-                println!("no empty");
                 return Some(res);
             }
-            println!("111 empty");
             None
         } else {
-            println!("222 empty");
             None
         }
     }
-
-
 }
