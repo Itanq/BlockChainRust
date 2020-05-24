@@ -76,7 +76,7 @@ fn get_balance(address: &str) {
         return;
     }
 
-    if let Some(bc) = BlockChain::new_block_chain(address) {
+    if let Some(bc) = BlockChain::new_block_chain() {
         let pub_key_hash = Utils::get_pub_key_hash(address);
         let utxo = bc.find_utxo(&pub_key_hash);
         let balance = utxo.iter().fold(0, |acc, x| {
@@ -95,13 +95,13 @@ fn list_addresses() {
 }
 
 fn print_blockchain() {
-    if let Some(bc) = BlockChain::new_block_chain("") {
+    if let Some(bc) = BlockChain::new_block_chain() {
         bc.print();
     }
 }
 
 fn send(from: &str, to: &str, amount: i32) {
-    if let Some(mut bc) = BlockChain::new_block_chain(&from) {
+    if let Some(mut bc) = BlockChain::new_block_chain() {
         if let Some(tx) = Transaction::new_utxo_transaction(from, to, amount, &bc) {
             bc.mine_block(vec![tx])
         } else {

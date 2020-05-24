@@ -57,6 +57,23 @@ impl TXOutput {
     }
 }
 
+impl ToString for TXOutput {
+    fn to_string(&self) -> String {
+        serde_json::to_string(&self).unwrap()
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TXOutputVec {
+    pub(crate) outputs: Vec<TXOutput>
+}
+
+impl ToString for TXOutputVec {
+    fn to_string(&self) -> String {
+        serde_json::to_string(&self).unwrap()
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Transaction {
     pub(crate) id: Vec<u8>,

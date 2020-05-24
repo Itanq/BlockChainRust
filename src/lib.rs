@@ -6,6 +6,7 @@ mod consensus;
 mod transaction;
 mod wallet;
 mod utils;
+mod utxo;
 
 pub use command::{
     Opt, run

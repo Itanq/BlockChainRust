@@ -8,8 +8,8 @@ const blockchain_db: &str = "block_chain.db";
 const genesis_coinbase_data: &str = "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks";
 
 pub struct BlockChain {
-    pub tip: [u8; 32],
-    db: sled::Db,
+    pub(crate) tip: [u8; 32],
+    pub(crate) db: sled::Db,
 }
 
 impl BlockChain {
@@ -34,7 +34,7 @@ impl BlockChain {
         })
     }
 
-    pub fn new_block_chain(address: &str) -> Option<Self> {
+    pub fn new_block_chain() -> Option<Self> {
         if !std::path::Path::new(blockchain_db).exists() {
             println!("No existing blockchain found, please create one first!!!");
             return None;
@@ -72,6 +72,56 @@ impl BlockChain {
             for out in tx.vout {
                 if out.is_locked_with_key(pub_key_hash) {
                     utxo.push(out);
+                }
+            }
+        }
+        utxo
+    }
+
+    pub fn find_all_utxo(&self) -> HashMap<String, TXOutputVec> {
+        // 未花费的交易输出
+        let mut utxo: HashMap<String, TXOutputVec> = HashMap::new();
+
+        //花费的交易输出,保存对应id的交易中已花费的交易输出
+        let mut spent_txos: HashMap::<String,Vec<i32>> = HashMap::new();
+
+        // 遍历所有区块
+        let mut iter = self.iter();
+        while let Some(bc) = iter.next() {
+
+            // 遍历区块中的所有交易
+            for tx in bc.transaction {
+                let tx_id = hex::encode(tx.id.clone());
+                // 遍历交易中的所有交易输出
+                for (out_idx, out) in tx.vout.iter().enumerate() {
+                    let mut spent = false;
+                    if let Some(spent_outs) = spent_txos.get(&tx_id) {
+                        // 检查交易输出是否已花费
+                        for spent_out_idx in spent_outs {
+                            if *spent_out_idx == out_idx as i32 {
+                                spent = true;
+                                break;
+                            }
+                        }
+                    }
+
+                    if !spent {
+                        let mut outs = utxo.get(&tx_id).unwrap().clone();
+                        outs.outputs.push(out.clone());
+
+                        utxo.insert(tx_id.clone(), outs.clone());
+                    }
+                }
+
+                if !tx.is_coinbase() {
+                    for vin in tx.vin.iter() {
+                        let vin_tx_id = hex::encode(vin.tx_id);
+                        if let Some(arr) = spent_txos.get_mut(&vin_tx_id) {
+                            arr.push(vin.vout);
+                        } else {
+                            spent_txos.insert(vin_tx_id, vec![vin.vout]);
+                        }
+                    }
                 }
             }
         }
